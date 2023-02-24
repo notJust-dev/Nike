@@ -1,11 +1,21 @@
-import { Text, FlatList, View, StyleSheet, Pressable } from 'react-native';
+import {
+  Text,
+  FlatList,
+  View,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
 import CartListItem from '../components/CartListItem';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import {
   selectDeliveryPrice,
   selectSubtotal,
   selectTotal,
+  cartSlice,
 } from '../store/cartSlice';
+import { useCreateOrderMutation } from '../store/apiSlice';
 
 const ShoppingCartTotals = () => {
   const subtotal = useSelector(selectSubtotal);
@@ -31,7 +41,38 @@ const ShoppingCartTotals = () => {
 };
 
 const ShoppingCart = () => {
+  const subtotal = useSelector(selectSubtotal);
+  const deliveryFee = useSelector(selectDeliveryPrice);
+  const total = useSelector(selectTotal);
+  const dispatch = useDispatch();
+
   const cartItems = useSelector((state) => state.cart.items);
+
+  const [createOrder, { data, error, isLoading }] = useCreateOrderMutation();
+
+  console.log(error, isLoading);
+
+  const onCreateOrder = async () => {
+    const result = await createOrder({
+      items: cartItems,
+      subtotal,
+      deliveryFee,
+      total,
+      customer: {
+        name: 'Vadim',
+        address: 'My home',
+        email: 'vadim@notjust.dev',
+      },
+    });
+
+    if (result.data?.status === 'OK') {
+      Alert.alert(
+        'Order has been submitted',
+        `Your order reference is: ${result.data.data.ref}`
+      );
+      dispatch(cartSlice.actions.clear());
+    }
+  };
 
   return (
     <>
@@ -40,8 +81,11 @@ const ShoppingCart = () => {
         renderItem={({ item }) => <CartListItem cartItem={item} />}
         ListFooterComponent={ShoppingCartTotals}
       />
-      <Pressable style={styles.button}>
-        <Text style={styles.buttonText}>Checkout</Text>
+      <Pressable onPress={onCreateOrder} style={styles.button}>
+        <Text style={styles.buttonText}>
+          Checkout
+          {isLoading && <ActivityIndicator />}
+        </Text>
       </Pressable>
     </>
   );
