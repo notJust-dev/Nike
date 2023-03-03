@@ -15,7 +15,11 @@ import {
   selectTotal,
   cartSlice,
 } from '../store/cartSlice';
-import { useCreateOrderMutation } from '../store/apiSlice';
+import {
+  useCreateOrderMutation,
+  useCreatePaymentIntentMutation,
+} from '../store/apiSlice';
+import { useStripe } from '@stripe/stripe-react-native';
 
 const ShoppingCartTotals = () => {
   const subtotal = useSelector(selectSubtotal);
@@ -50,7 +54,45 @@ const ShoppingCart = () => {
 
   const [createOrder, { data, error, isLoading }] = useCreateOrderMutation();
 
-  console.log(error, isLoading);
+  const [createPaymentIntent] = useCreatePaymentIntentMutation();
+
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+
+  const onCheckout = async () => {
+    // 1. Create a payment intent
+    const response = await createPaymentIntent({
+      amount: Math.floor(total * 100),
+    });
+    if (response.error) {
+      Alert.alert('Something went wrong');
+      return;
+    }
+
+    // 2. Initialize the Payment sheet
+    const initResponse = await initPaymentSheet({
+      merchantDisplayName: 'notJust.dev',
+      paymentIntentClientSecret: response.data.paymentIntent,
+    });
+    if (initResponse.error) {
+      console.log(initResponse.error);
+      Alert.alert('Something went wrong');
+      return;
+    }
+
+    // 3. Present the Payment Sheet from Stripe
+    const paymentResponse = await presentPaymentSheet();
+
+    if (paymentResponse.error) {
+      Alert.alert(
+        `Error code: ${paymentResponse.error.code}`,
+        paymentResponse.error.message
+      );
+      return;
+    }
+
+    // 4. If payment ok -> create the order
+    onCreateOrder();
+  };
 
   const onCreateOrder = async () => {
     const result = await createOrder({
@@ -81,7 +123,7 @@ const ShoppingCart = () => {
         renderItem={({ item }) => <CartListItem cartItem={item} />}
         ListFooterComponent={ShoppingCartTotals}
       />
-      <Pressable onPress={onCreateOrder} style={styles.button}>
+      <Pressable onPress={onCheckout} style={styles.button}>
         <Text style={styles.buttonText}>
           Checkout
           {isLoading && <ActivityIndicator />}
